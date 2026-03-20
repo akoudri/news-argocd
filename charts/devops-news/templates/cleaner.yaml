@@ -1,0 +1,31 @@
+{{- if .Values.cleaner.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "devops-news.fullname" (dict "root" . "component" "cleaner") }}
+  labels:
+    {{- include "devops-news.labels" (dict "root" . "component" "cleaner") | nindent 4 }}
+spec:
+  schedule: {{ .Values.cleaner.schedule | quote }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleaner
+              image: "{{ .Values.images.repoAccount }}/devops-news-cleaner:{{ .Values.images.tags.cleaner }}"
+              imagePullPolicy: {{ .Values.images.pullPolicy }}
+              env:
+                - name: REDIS_HOST
+                  value: {{ include "devops-news.fullname" (dict "root" . "component" "redis") | quote }}
+                - name: REDIS_PORT
+                  value: {{ .Values.redis.service.port | quote }}
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "devops-news.redisSecretName" . }}
+                      key: password
+                - name: MAX_AGE_SECONDS
+                  value: {{ .Values.cleaner.maxAgeSeconds | quote }}
+{{- end }}

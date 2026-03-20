@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "devops-news.fullname" (dict "root" . "component" "pre-upgrade-backup") }}
+  labels:
+    {{- include "devops-news.labels" (dict "root" . "component" "backup") | nindent 4 }}
+  annotations:
+    # Hook ArgoCD : s'exécute avant la synchronisation
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: backup
+          image: redis:6.0-alpine
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "devops-news.redisSecretName" . }}
+                  key: password
+                  optional: true
+          command:
+            - sh
+            - -c
+            - |
+              if [ -z "$REDIS_PASSWORD" ]; then
+                echo "[pre-sync] Premier déploiement détecté — pas de backup nécessaire."
+                exit 0
+              fi
+              echo "[pre-sync] Sauvegarde des données Redis avant sync..."
+              COUNT=$(redis-cli \
+                -h {{ include "devops-news.fullname" (dict "root" . "component" "redis") }} \
+                -p {{ .Values.redis.service.port }} \
+                -a "$REDIS_PASSWORD" \
+                --no-auth-warning LLEN devops_news)
+              echo "[pre-sync] $COUNT news en base avant la mise à jour."
+              echo "[pre-sync] Sauvegarde simulée terminée."

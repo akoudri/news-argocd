@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: devops-news-dev
+  namespace: argocd
+  # Cette annotation permet à Argo CD de supprimer l'app
+  # quand ce fichier est supprimé du dépôt Git (App of Apps pattern)
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  # ── Source : où est le chart et les valeurs ────────────────────────
+  source:
+    repoURL: https://github.com/akoudri/news-argocd.git
+    targetRevision: main
+    path: charts/devops-news  # Chemin vers le chart dans le repo
+    helm:
+      # Fichier de valeurs additionnel (relatif à la racine du repo)
+      valueFiles:
+        - ../../environments/dev/values-dev.yaml
+      # Surcharges supplémentaires (ex: tag d'image issu du CI)
+      parameters:
+        - name: images.tags.backend
+          value: "latest"
+
+  # ── Destination : où déployer ──────────────────────────────────────
+  destination:
+    server: https://kubernetes.default.svc  # Le cluster local
+    namespace: ali
+
+  # ── Politique de synchronisation ──────────────────────────────────
+  syncPolicy:
+    # Création automatique du namespace
+    syncOptions:
+      - CreateNamespace=true
+    automated:
+      # Déployer automatiquement dès qu'un commit est détecté
+      prune: true      # Supprimer les ressources K8s retirées du chart
+      selfHeal: true   # Corriger les modifications manuelles (drift)
